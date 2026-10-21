@@ -1363,7 +1363,7 @@ const loadPayload = (payload) => {
   recalculate();
 };
 
-const clearForm = () => {
+const clearForm = (nextSequence = null) => {
   [
     "clientName",
     "attentionName",
@@ -1379,10 +1379,18 @@ const clearForm = () => {
   elements.validity.value = DEFAULT_VALIDITY;
 
   applyIssuerProfile(getIssuerProfile());
-  assignQuoteSequence();
+
+  if (nextSequence !== null) {
+    state.quoteSequence = nextSequence;
+    elements.quoteNumber.value = formatQuoteNumber(nextSequence);
+  } else {
+    assignQuoteSequence();
+  }
+
   elements.quoteDate.value = new Date().toISOString().split("T")[0];
   elements.discountRate.value = 0;
 
+  state.items = [];
   elements.tbody.innerHTML = "";
   addRow();
   recalculate();
@@ -1416,18 +1424,31 @@ const persistQuote = async ({ notify } = { notify: true }) => {
 };
 
 const saveAndGeneratePdf = async () => {
+  if (elements.saveBtn.disabled) {
+    return;
+  }
+
   recalculate();
 
   if (!validateQuoteBeforeSave()) {
     return;
   }
 
-  saveClientProfile(getClientFormData(), { notify: false });
-  await persistQuote({ notify: false });
-  generatePdf();
+  elements.saveBtn.disabled = true;
+  elements.saveBtn.textContent = "Guardando...";
 
-  // Dejar el formulario limpio para la siguiente cotizacion
-  clearForm();
+  try {
+    saveClientProfile(getClientFormData(), { notify: false });
+    await persistQuote({ notify: false });
+    generatePdf();
+
+    // Dejar el formulario limpio con el siguiente correlativo
+    const nextSequence = getStoredSequence();
+    clearForm(nextSequence);
+  } finally {
+    elements.saveBtn.disabled = false;
+    elements.saveBtn.textContent = "Guardar y generar PDF";
+  }
 };
 
 const loadQuote = () => {
