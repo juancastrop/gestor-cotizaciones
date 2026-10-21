@@ -52,6 +52,8 @@ const elements = {
   discount: document.getElementById("discount"),
   tax: document.getElementById("tax"),
   total: document.getElementById("total"),
+  historyClientFilter: document.getElementById("historyClientFilter"),
+  historyList: document.getElementById("historyList"),
 };
 
 const STORAGE_KEY = "gestor-cotizaciones-v1";
@@ -71,6 +73,7 @@ const SUPABASE_TABLES = {
   clients: "gc_clients",
   issuer: "gc_issuer_profile",
 };
+const SUPABASE_PDF_BUCKET = "gc-pdfs";
 
 const ISSUER_DEFAULTS = {
   issuerName: "GlassCode spa",
@@ -90,6 +93,7 @@ const state = {
   attentionNameIndex: [],
   cloudSyncAvailable: false,
   cloudSyncWarned: false,
+  history: [],
 };
 
 const supabaseClient =
@@ -374,6 +378,200 @@ const pullLatestQuoteFromCloud = async () => {
   }
 
   return data?.[0]?.payload || null;
+};
+
+const sanitizeFileSegment = (value) =>
+  (value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "sin-nombre";
+
+const buildPdfStoragePath = (payload) => {
+  const clientSegment = sanitizeFileSegment(payload?.meta?.clientName);
+  const quoteSegment = sanitizeFileSegment(payload?.meta?.quoteNumber);
+  return `${clientSegment}/${quoteSegment}.pdf`;
+};
+
+const uploadPdfToCloud = async (pdfBlob, payload) => {
+  if (!supabaseClient) {
+    return;
+  }
+
+  const path = buildPdfStoragePath(payload);
+
+  const { error } = await supabaseClient.storage
+    .from(SUPABASE_PDF_BUCKET)
+    .upload(path, pdfBlob, { contentType: "application/pdf", upsert: true });
+
+  if (error) {
+    warnCloudSyncError("pdf-upload", error);
+  }
+};
+
+const pullQuoteHistoryFromCloud = async () => {
+  if (!supabaseClient) {
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from(SUPABASE_TABLES.quotes)
+    .select("quote_number, quote_sequence, payload, updated_at")
+    .order("quote_sequence", { ascending: false });
+
+  if (error) {
+    warnCloudSyncError("history-select", error);
+    return;
+  }
+
+  state.history = (data || []).map((row) => ({
+    quoteNumber: row.quote_number,
+    clientName: row.payload?.meta?.clientName || "Sin cliente",
+    quoteDate: row.payload?.meta?.quoteDate || "",
+    total: row.payload?.meta?.total,
+    storagePath: buildPdfStoragePath(row.payload),
+  }));
+
+  renderQuoteHistory();
+};
+
+const renderQuoteHistory = () => {
+  const filterValue = normalizeLookupValue(elements.historyClientFilter.value);
+
+  const clientNames = [
+    ...new Set(state.history.map((entry) => entry.clientName).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b, "es"));
+
+  const currentFilter = elements.historyClientFilter.value;
+  elements.historyClientFilter.innerHTML = '<option value="">Todos los clientes</option>';
+  clientNames.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    elements.historyClientFilter.appendChild(option);
+  });
+  elements.historyClientFilter.value = clientNames.includes(currentFilter) ? currentFilter : "";
+
+  const visibleEntries = filterValue
+    ? state.history.filter(
+        (entry) => normalizeLookupValue(entry.clientName) === normalizeLookupValue(elements.historyClientFilter.value),
+      )
+    : state.history;
+
+  elements.historyList.innerHTML = "";
+
+  if (!visibleEntries.length) {
+    const empty = document.createElement("p");
+    empty.className = "history-empty";
+    empty.textContent = state.history.length
+      ? "No hay cotizaciones para este cliente."
+      : "No hay cotizaciones guardadas todavia.";
+    elements.historyList.appendChild(empty);
+    return;
+  }
+
+  visibleEntries.forEach((entry) => {
+    const item = document.createElement("div");
+    item.className = "history-item";
+
+    const info = document.createElement("div");
+    info.className = "history-item-info";
+
+    const title = document.createElement("span");
+    title.className = "history-item-title";
+    title.textContent = `${entry.quoteNumber} — ${entry.clientName}`;
+
+    const meta = document.createElement("span");
+    meta.className = "history-item-meta";
+    meta.textContent = formatDateForDisplay(entry.quoteDate);
+
+    info.append(title, meta);
+
+    const actions = document.createElement("div");
+    actions.className = "history-item-actions";
+
+    const viewBtn = document.createElement("button");
+    viewBtn.type = "button";
+    viewBtn.className = "ghost";
+    viewBtn.textContent = "Ver";
+    viewBtn.addEventListener("click", () => void openHistoryPdf(entry, { download: false }));
+
+    const downloadBtn = document.createElement("button");
+    downloadBtn.type = "button";
+    downloadBtn.className = "solid";
+    downloadBtn.textContent = "Descargar";
+    downloadBtn.addEventListener("click", () => void openHistoryPdf(entry, { download: true }));
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "ghost";
+    deleteBtn.textContent = "Eliminar";
+    deleteBtn.addEventListener("click", () => void deleteHistoryEntry(entry));
+
+    actions.append(viewBtn, downloadBtn, deleteBtn);
+    item.append(info, actions);
+    elements.historyList.appendChild(item);
+  });
+};
+
+const openHistoryPdf = async (entry, { download }) => {
+  if (!supabaseClient) {
+    return;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(SUPABASE_PDF_BUCKET)
+    .createSignedUrl(entry.storagePath, 120);
+
+  if (error) {
+    warnCloudSyncError("pdf-signed-url", error);
+    return;
+  }
+
+  if (download) {
+    const link = document.createElement("a");
+    link.href = data.signedUrl;
+    link.download = `${entry.quoteNumber}-${sanitizeFileSegment(entry.clientName)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
+  }
+
+  window.open(data.signedUrl, "_blank");
+};
+
+const deleteHistoryEntry = async (entry) => {
+  if (!supabaseClient) {
+    return;
+  }
+
+  const confirmed = confirm(
+    `¿Eliminar la cotizacion ${entry.quoteNumber} de ${entry.clientName}?\n\nSe borrara el registro y el PDF de la nube. Esta accion no se puede deshacer.`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const [pdfResult, quoteResult] = await Promise.all([
+    supabaseClient.storage.from(SUPABASE_PDF_BUCKET).remove([entry.storagePath]),
+    supabaseClient.from(SUPABASE_TABLES.quotes).delete().eq("quote_number", entry.quoteNumber),
+  ]);
+
+  if (quoteResult.error) {
+    warnCloudSyncError("history-delete", quoteResult.error);
+    return;
+  }
+
+  if (pdfResult.error) {
+    console.warn("No se pudo borrar el PDF:", pdfResult.error.message);
+  }
+
+  state.history = state.history.filter((item) => item.quoteNumber !== entry.quoteNumber);
+  renderQuoteHistory();
 };
 
 const renderClientDirectory = () => {
@@ -1078,6 +1276,8 @@ const generatePdf = () => {
   const blob = pdf.output("blob");
   const blobUrl = URL.createObjectURL(blob);
 
+  void uploadPdfToCloud(blob, toPayload()).then(() => pullQuoteHistoryFromCloud());
+
   if (previewWindow) {
     previewWindow.location.href = blobUrl;
   } else {
@@ -1254,6 +1454,7 @@ const initApp = async () => {
 
   try {
     await syncFromCloud();
+    await pullQuoteHistoryFromCloud();
   } catch (error) {
     warnCloudSyncError("init-sync", error);
   }
@@ -1266,6 +1467,7 @@ elements.clearClientBtn.addEventListener("click", clearClientSelection);
 elements.closeClientModalBtn.addEventListener("click", closeClientModal);
 elements.clientModalForm.addEventListener("submit", handleClientModalSave);
 elements.newQuoteBtn.addEventListener("click", clearForm);
+elements.historyClientFilter.addEventListener("change", renderQuoteHistory);
 elements.toggleIssuerBtn.addEventListener("click", () => {
   if (!state.issuerEditorOpen) {
     setIssuerEditorOpen(true);

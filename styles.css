@@ -309,6 +309,65 @@ textarea {
   margin-top: 1rem;
 }
 
+.history-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.history-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.history-item-info {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.history-item-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.history-item-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.history-item-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.history-item-actions button {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+#historyClientFilter {
+  font-family: "Sora", sans-serif;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
 textarea {
   resize: vertical;
 }
