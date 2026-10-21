@@ -16,7 +16,25 @@
     <div class="bg-shape bg-shape-1" aria-hidden="true"></div>
     <div class="bg-shape bg-shape-2" aria-hidden="true"></div>
 
-    <main class="layout">
+    <div id="loginScreen" class="login-screen" hidden>
+      <form id="loginForm" class="card login-card">
+        <p class="tag">Acceso restringido</p>
+        <h1>Gestor de Cotizaciones</h1>
+        <p class="subtitle">Inicia sesion para continuar.</p>
+        <label>
+          Correo
+          <input id="loginEmail" type="email" autocomplete="username" placeholder="correo@empresa.cl" required />
+        </label>
+        <label>
+          Contrasena
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="********" required />
+        </label>
+        <small id="loginError" class="field-error" hidden>Correo o contrasena incorrectos.</small>
+        <button id="loginBtn" class="accent" type="submit">Ingresar</button>
+      </form>
+    </div>
+
+    <main class="layout" id="appLayout">
       <section class="card header-card reveal">
         <div>
           <p class="tag">Herramienta comercial</p>
@@ -24,6 +42,7 @@
           <p class="subtitle">Crea presupuestos claros, profesionales y listos para enviar.</p>
         </div>
         <div class="actions">
+          <button id="logoutBtn" class="ghost" type="button" hidden>Cerrar sesion</button>
           <button id="newQuoteBtn" class="ghost">Nueva cotizacion</button>
           <button id="saveBtn" class="accent">Guardar y generar PDF</button>
         </div>

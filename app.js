@@ -1,4 +1,12 @@
 const elements = {
+  loginScreen: document.getElementById("loginScreen"),
+  loginForm: document.getElementById("loginForm"),
+  loginEmail: document.getElementById("loginEmail"),
+  loginPassword: document.getElementById("loginPassword"),
+  loginError: document.getElementById("loginError"),
+  loginBtn: document.getElementById("loginBtn"),
+  appLayout: document.getElementById("appLayout"),
+  logoutBtn: document.getElementById("logoutBtn"),
   quoteNumber: document.getElementById("quoteNumber"),
   quoteDate: document.getElementById("quoteDate"),
   issuerName: document.getElementById("issuerName"),
@@ -90,6 +98,66 @@ const supabaseClient =
     : null;
 
 state.cloudSyncAvailable = Boolean(supabaseClient);
+
+const setAuthView = (isLoggedIn) => {
+  elements.loginScreen.hidden = isLoggedIn;
+  elements.appLayout.hidden = !isLoggedIn;
+  elements.logoutBtn.hidden = !isLoggedIn;
+};
+
+const handleLogin = async (event) => {
+  event.preventDefault();
+
+  if (!supabaseClient) {
+    return;
+  }
+
+  elements.loginBtn.disabled = true;
+  elements.loginError.hidden = true;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({
+    email: elements.loginEmail.value.trim(),
+    password: elements.loginPassword.value,
+  });
+
+  elements.loginBtn.disabled = false;
+
+  if (error) {
+    console.warn("Login error:", error.message);
+    elements.loginError.hidden = false;
+    return;
+  }
+
+  elements.loginPassword.value = "";
+};
+
+const handleLogout = async () => {
+  if (!supabaseClient) {
+    return;
+  }
+
+  await supabaseClient.auth.signOut();
+};
+
+const initAuth = async () => {
+  if (!supabaseClient) {
+    alert("No se pudo configurar la conexion con Supabase. Revisa las credenciales.");
+    return null;
+  }
+
+  const { data } = await supabaseClient.auth.getSession();
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    const isLoggedIn = Boolean(session);
+    setAuthView(isLoggedIn);
+
+    if (isLoggedIn) {
+      void initApp();
+    }
+  });
+
+  return data?.session || null;
+};
 
 const warnCloudSyncError = (context, error) => {
   console.warn(`Supabase sync warning (${context}):`, error?.message || error || "unknown error");
@@ -1258,4 +1326,15 @@ document.addEventListener("click", (event) => {
   }
 });
 
-void initApp();
+elements.loginForm.addEventListener("submit", handleLogin);
+elements.logoutBtn.addEventListener("click", handleLogout);
+
+elements.appLayout.hidden = true;
+
+void initAuth().then((session) => {
+  setAuthView(Boolean(session));
+
+  if (session) {
+    void initApp();
+  }
+});
