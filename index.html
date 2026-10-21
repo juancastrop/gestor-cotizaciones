@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestor de Cotizaciones</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-1" aria-hidden="true"></div>
+    <div class="bg-shape bg-shape-2" aria-hidden="true"></div>
+
+    <main class="layout">
+      <section class="card header-card reveal">
+        <div>
+          <p class="tag">Herramienta comercial</p>
+          <h1>Gestor de Cotizaciones</h1>
+          <p class="subtitle">Crea presupuestos claros, profesionales y listos para enviar.</p>
+        </div>
+        <div class="actions">
+          <button id="newQuoteBtn" class="ghost">Nueva cotizacion</button>
+          <button id="saveBtn" class="accent">Guardar y generar PDF</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card reveal">
+          <div class="section-heading">
+            <h2>Datos del emisor</h2>
+            <button id="toggleIssuerBtn" class="ghost" type="button">Editar emisor</button>
+          </div>
+          <div class="form-grid">
+            <label>
+              Numero de cotizacion
+              <input id="quoteNumber" type="text" placeholder="COT-0001" readonly />
+            </label>
+            <label>
+              Fecha
+              <input id="quoteDate" type="date" />
+            </label>
+          </div>
+
+          <div id="issuerFields" class="form-grid locked-group">
+            <label>
+              Nombre empresa
+              <input id="issuerName" type="text" placeholder="GlassCode spa" />
+            </label>
+            <label>
+              RUT
+              <input id="issuerRut" type="text" placeholder="78.370.223-1" />
+            </label>
+            <label>
+              Direccion
+              <input id="issuerAddress" type="text" placeholder="Providencia 1017 OF 41" />
+            </label>
+            <label>
+              Fono
+              <input id="issuerPhone" type="text" placeholder="+56 9 790 54 756" />
+            </label>
+            <label class="span-2">
+              E-mail
+              <input id="issuerEmail" type="email" placeholder="contacto@empresa.cl" />
+            </label>
+            <label class="span-2">
+              Vendedor
+              <input id="sellerName" type="text" placeholder="Juan Castro" />
+            </label>
+          </div>
+        </article>
+
+        <article class="card reveal">
+          <h2>Condiciones</h2>
+          <div class="form-grid client-conditions">
+            <label>
+              Descuento global (%)
+              <input id="discountRate" type="number" min="0" step="0.1" value="0" />
+            </label>
+            <label>
+              Vigencia
+              <select id="validity">
+                <option value="">Seleccionar vigencia</option>
+                <option value="Inmediata">Inmediata</option>
+                <option value="5 dias">5 dias</option>
+                <option value="10 dias" selected>10 dias</option>
+                <option value="15 dias">15 dias</option>
+                <option value="30 dias">30 dias</option>
+              </select>
+            </label>
+            <label class="span-2">
+              Condicion de venta
+              <select id="salesTerms">
+                <option value="">Seleccionar condicion</option>
+                <option value="70% adelanto|30% contra entrega">70% adelanto / 30% contra entrega</option>
+                <option value="50% adelanto|50% contra entrega">50% adelanto / 50% contra entrega</option>
+                <option value="Pago contado">Pago contado</option>
+                <option value="Credito 30 dias">Credito 30 dias</option>
+              </select>
+              <small id="salesTermsError" class="field-error" hidden>Selecciona una condicion de venta.</small>
+            </label>
+          </div>
+
+          <label class="notes">
+            Notas
+            <textarea id="notes" rows="5" placeholder="Alcance, tiempos de entrega, condiciones..."></textarea>
+          </label>
+        </article>
+
+        <article class="card reveal span-full">
+          <div class="section-heading">
+            <h2>Datos del cliente</h2>
+            <div class="section-actions">
+              <button id="clearClientBtn" class="ghost" type="button">Cambiar cliente</button>
+              <button id="openClientModalBtn" class="ghost" type="button">Crear cliente</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>
+              Razon social
+              <div class="searchable-field">
+                <input id="clientName" type="text" autocomplete="off" placeholder="Nombre de la empresa" />
+                <div id="clientNameSuggestions" class="suggestions" hidden></div>
+              </div>
+            </label>
+            <label>
+              Atencion a
+              <div class="searchable-field">
+                <input id="attentionName" type="text" autocomplete="off" placeholder="Nombre del contacto" />
+                <div id="attentionNameSuggestions" class="suggestions" hidden></div>
+              </div>
+              <small id="attentionNameError" class="field-error" hidden>Este campo es obligatorio.</small>
+            </label>
+            <label>
+              Direccion
+              <input id="clientCompany" type="text" placeholder="Dirección de la empresa" />
+            </label>
+            <label>
+              Correo
+              <input id="clientEmail" type="email" placeholder="correo@cliente.cl" />
+            </label>
+            <label>
+              Fono
+              <input id="clientPhone" type="text" placeholder="+56 9..." />
+            </label>
+          </div>
+        </article>
+      </section>
+
+      <dialog id="clientModal" class="client-modal">
+        <form id="clientModalForm" class="client-modal-content" method="dialog">
+          <div class="section-heading client-modal-heading">
+            <h2>Crear cliente</h2>
+            <button id="closeClientModalBtn" class="ghost" type="button">Cancelar</button>
+          </div>
+          <div class="form-grid">
+            <label>
+              Razon social
+              <input id="modalClientName" type="text" placeholder="Nombre de la empresa" />
+            </label>
+            <label>
+              Atencion a
+              <input id="modalAttentionName" type="text" placeholder="Nombre del contacto" />
+            </label>
+            <label>
+              Direccion
+              <input id="modalClientCompany" type="text" placeholder="Dirección de la empresa" />
+            </label>
+            <label>
+              Correo
+              <input id="modalClientEmail" type="email" placeholder="correo@cliente.cl" />
+            </label>
+            <label>
+              Fono
+              <input id="modalClientPhone" type="text" placeholder="+56 9..." />
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button id="saveClientModalBtn" class="accent" type="submit">Guardar cliente</button>
+          </div>
+        </form>
+      </dialog>
+
+      <section class="card reveal">
+        <div class="items-header">
+          <h2>Servicios / Conceptos</h2>
+          <button id="addItemBtn" class="solid">Agregar item</button>
+        </div>
+        <small id="itemsError" class="field-error" hidden>Completa los items con descripcion, cantidad y precio mayores a 0.</small>
+
+        <div class="table-wrap">
+          <table id="itemsTable">
+            <thead>
+              <tr>
+                <th>Cantidad</th>
+                <th>Descripcion</th>
+                <th>Precio unitario</th>
+                <th>Importe</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card total-card reveal">
+          <h2>Resumen</h2>
+          <dl>
+            <div>
+              <dt>Subtotal</dt>
+              <dd id="subtotal">$0.00</dd>
+            </div>
+            <div id="discountRow" hidden>
+              <dt>Descuento</dt>
+              <dd id="discount">$0.00</dd>
+            </div>
+            <div>
+              <dt>I.V.A.</dt>
+              <dd id="tax">$0.00</dd>
+            </div>
+            <div class="grand-total">
+              <dt>Total</dt>
+              <dd id="total">$0.00</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+    </main>
+
+    <template id="rowTemplate">
+      <tr>
+        <td><input class="item-qty" type="number" min="0" step="0.01" value="1" /></td>
+        <td><input class="item-description" type="text" placeholder="Servicio o producto" /></td>
+        <td><input class="item-price" type="number" min="0" step="0.01" value="0" /></td>
+        <td><span class="item-total">$0.00</span></td>
+        <td><button class="delete-row" aria-label="Eliminar">x</button></td>
+      </tr>
+    </template>
+
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+      window.GESTOR_SUPABASE_URL = "https://khuirmrbirrikwemnjwm.supabase.co";
+      window.GESTOR_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtodWlybXJiaXJyaWt3ZW1uandtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NTMwODIsImV4cCI6MjEwNTUyOTA4Mn0.-7YptSzl64k4dRzVALYJwE10mjSIhe4mZu8z_IRpplQ";
+    </script>
+    <script src="app.js"></script>
+  </body>
+</html>
