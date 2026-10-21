@@ -361,6 +361,25 @@ const pushQuoteToCloud = async (payload) => {
   }
 };
 
+const pullLatestQuoteSequenceFromCloud = async () => {
+  if (!supabaseClient) {
+    return null;
+  }
+
+  const { data, error } = await supabaseClient
+    .from(SUPABASE_TABLES.quotes)
+    .select("quote_sequence")
+    .order("quote_sequence", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    warnCloudSyncError("quote-sequence-select", error);
+    return null;
+  }
+
+  return data?.[0]?.quote_sequence ?? null;
+};
+
 const pullLatestQuoteFromCloud = async () => {
   if (!supabaseClient) {
     return null;
@@ -1369,14 +1388,26 @@ const clearForm = () => {
   recalculate();
 };
 
-const persistQuote = ({ notify } = { notify: true }) => {
+const persistQuote = async ({ notify } = { notify: true }) => {
+  // Antes de guardar, verificar que el correlativo no este duplicado en la nube
+  if (supabaseClient) {
+    const cloudMax = await pullLatestQuoteSequenceFromCloud();
+
+    if (cloudMax !== null && state.quoteSequence <= cloudMax) {
+      const nextSequence = cloudMax + 1;
+      setStoredSequence(nextSequence + 1);
+      state.quoteSequence = nextSequence;
+      elements.quoteNumber.value = formatQuoteNumber(nextSequence);
+    }
+  }
+
   const payload = toPayload();
 
   saveIssuerProfile();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   void pushQuoteToCloud(payload);
 
-  if (state.quoteSequence === getStoredSequence()) {
+  if (state.quoteSequence >= getStoredSequence()) {
     setStoredSequence(state.quoteSequence + 1);
   }
 
@@ -1385,7 +1416,7 @@ const persistQuote = ({ notify } = { notify: true }) => {
   }
 };
 
-const saveAndGeneratePdf = () => {
+const saveAndGeneratePdf = async () => {
   recalculate();
 
   if (!validateQuoteBeforeSave()) {
@@ -1393,7 +1424,7 @@ const saveAndGeneratePdf = () => {
   }
 
   saveClientProfile(getClientFormData(), { notify: false });
-  persistQuote({ notify: false });
+  await persistQuote({ notify: false });
   generatePdf();
 };
 
@@ -1415,10 +1446,11 @@ const syncFromCloud = async () => {
     return;
   }
 
-  const [cloudIssuer, cloudClients, cloudQuote] = await Promise.all([
+  const [cloudIssuer, cloudClients, cloudQuote, cloudMaxSequence] = await Promise.all([
     pullIssuerProfileFromCloud(),
     pullClientsFromCloud(),
     pullLatestQuoteFromCloud(),
+    pullLatestQuoteSequenceFromCloud(),
   ]);
 
   if (cloudIssuer) {
@@ -1434,11 +1466,26 @@ const syncFromCloud = async () => {
     renderClientDirectory();
   }
 
+  // El correlativo siempre se basa en el maximo de la nube + 1
+  const localSequence = getStoredSequence();
+  const nextSequence = Math.max(localSequence, (cloudMaxSequence ?? 0) + 1);
+
+  if (nextSequence !== localSequence) {
+    setStoredSequence(nextSequence);
+    assignQuoteSequence(nextSequence);
+  }
+
   if (cloudQuote) {
     const currentSequence = state.quoteSequence || 0;
     const cloudSequence = cloudQuote?.meta?.quoteSequence || 0;
 
-    if (cloudSequence >= currentSequence) {
+    // Solo cargar la ultima cotizacion de la nube si el formulario esta vacio
+    const formIsEmpty =
+      !elements.clientName.value.trim() &&
+      !elements.attentionName.value.trim() &&
+      state.items.every((item) => !item.description.trim());
+
+    if (formIsEmpty && cloudSequence >= currentSequence) {
       loadPayload(cloudQuote);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudQuote));
     }
