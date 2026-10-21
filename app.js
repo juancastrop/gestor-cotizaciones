@@ -1404,7 +1404,6 @@ const persistQuote = async ({ notify } = { notify: true }) => {
   const payload = toPayload();
 
   saveIssuerProfile();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   void pushQuoteToCloud(payload);
 
   if (state.quoteSequence >= getStoredSequence()) {
@@ -1426,19 +1425,15 @@ const saveAndGeneratePdf = async () => {
   saveClientProfile(getClientFormData(), { notify: false });
   await persistQuote({ notify: false });
   generatePdf();
+
+  // Dejar el formulario limpio para la siguiente cotizacion
+  clearForm();
 };
 
 const loadQuote = () => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    clearForm();
-  } else {
-    try {
-      loadPayload(JSON.parse(stored));
-    } catch {
-      clearForm();
-    }
-  }
+  // La app siempre inicia con el formulario limpio.
+  // Las cotizaciones anteriores se revisan en el Historial.
+  clearForm();
 };
 
 const syncFromCloud = async () => {
@@ -1473,22 +1468,6 @@ const syncFromCloud = async () => {
   if (nextSequence !== localSequence) {
     setStoredSequence(nextSequence);
     assignQuoteSequence(nextSequence);
-  }
-
-  if (cloudQuote) {
-    const currentSequence = state.quoteSequence || 0;
-    const cloudSequence = cloudQuote?.meta?.quoteSequence || 0;
-
-    // Solo cargar la ultima cotizacion de la nube si el formulario esta vacio
-    const formIsEmpty =
-      !elements.clientName.value.trim() &&
-      !elements.attentionName.value.trim() &&
-      state.items.every((item) => !item.description.trim());
-
-    if (formIsEmpty && cloudSequence >= currentSequence) {
-      loadPayload(cloudQuote);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudQuote));
-    }
   }
 };
 
