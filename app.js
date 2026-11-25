@@ -98,8 +98,32 @@ const state = {
 
 const supabaseClient =
   window.supabase?.createClient && SUPABASE_URL && SUPABASE_ANON_KEY
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      })
     : null;
+
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+let inactivityTimer = null;
+
+const resetInactivityTimer = () => {
+  if (!supabaseClient) return;
+
+  window.clearTimeout(inactivityTimer);
+  inactivityTimer = window.setTimeout(async () => {
+    await handleLogout();
+  }, INACTIVITY_TIMEOUT_MS);
+};
+
+["mousedown", "mousemove", "keydown", "touchstart", "scroll"].forEach((eventName) => {
+  window.addEventListener(eventName, resetInactivityTimer, { passive: true });
+});
+
+resetInactivityTimer();
 
 state.cloudSyncAvailable = Boolean(supabaseClient);
 
@@ -133,6 +157,7 @@ const handleLogin = async (event) => {
   }
 
   elements.loginPassword.value = "";
+  resetInactivityTimer();
 };
 
 const handleLogout = async () => {
@@ -140,6 +165,8 @@ const handleLogout = async () => {
     return;
   }
 
+  window.clearTimeout(inactivityTimer);
+  inactivityTimer = null;
   await supabaseClient.auth.signOut();
 };
 
@@ -158,6 +185,13 @@ const initAuth = async () => {
 
     supabaseClient.auth.onAuthStateChange((_event, session) => {
       setAuthView(Boolean(session));
+
+      if (session) {
+        resetInactivityTimer();
+      } else if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+      }
     });
   }
 
