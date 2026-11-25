@@ -143,6 +143,8 @@ const handleLogout = async () => {
   await supabaseClient.auth.signOut();
 };
 
+let authInitialized = false;
+
 const initAuth = async () => {
   if (!supabaseClient) {
     alert("No se pudo configurar la conexion con Supabase. Revisa las credenciales.");
@@ -151,14 +153,13 @@ const initAuth = async () => {
 
   const { data } = await supabaseClient.auth.getSession();
 
-  supabaseClient.auth.onAuthStateChange((_event, session) => {
-    const isLoggedIn = Boolean(session);
-    setAuthView(isLoggedIn);
+  if (!authInitialized) {
+    authInitialized = true;
 
-    if (isLoggedIn) {
-      void initApp();
-    }
-  });
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setAuthView(Boolean(session));
+    });
+  }
 
   return data?.session || null;
 };
@@ -957,17 +958,19 @@ const recalculate = () => {
 
   state.items.forEach((item, index) => {
     const row = elements.tbody.querySelectorAll("tr")[index];
-    row.querySelector(".item-total").textContent = formatMoney(getItemTotal(item));
+    if (row) {
+      row.querySelector(".item-total").textContent = formatMoney(getItemTotal(item));
+    }
   });
 
   const totals = getQuoteTotals();
-
   elements.subtotal.textContent = formatMoney(totals.subtotal);
   elements.discount.textContent = `-${formatMoney(totals.discountAmount)}`;
   elements.discountRow.hidden = totals.discountAmount <= 0;
   elements.tax.textContent = formatMoney(totals.taxAmount);
   elements.total.textContent = formatMoney(totals.total);
   applyLiveValidation();
+  saveDraft();
 };
 
 const setFieldError = (field, messageNode, hasError) => {
@@ -1445,6 +1448,7 @@ const saveAndGeneratePdf = async () => {
     // Dejar el formulario limpio con el siguiente correlativo
     const nextSequence = getStoredSequence();
     clearForm(nextSequence);
+    localStorage.removeItem(DRAFT_KEY);
   } finally {
     elements.saveBtn.disabled = false;
     elements.saveBtn.textContent = "Guardar y generar PDF";
@@ -1497,7 +1501,7 @@ const initApp = async () => {
   renderClientDirectory();
   setIssuerLocked(true);
   setIssuerEditorOpen(false);
-  loadQuote();
+  loadDraft();
 
   try {
     await syncFromCloud();
@@ -1513,7 +1517,10 @@ elements.openClientModalBtn.addEventListener("click", openClientModal);
 elements.clearClientBtn.addEventListener("click", clearClientSelection);
 elements.closeClientModalBtn.addEventListener("click", closeClientModal);
 elements.clientModalForm.addEventListener("submit", handleClientModalSave);
-elements.newQuoteBtn.addEventListener("click", clearForm);
+elements.newQuoteBtn.addEventListener("click", () => {
+  clearForm();
+  localStorage.removeItem(DRAFT_KEY);
+});
 elements.historyClientFilter.addEventListener("change", renderQuoteHistory);
 elements.toggleIssuerBtn.addEventListener("click", () => {
   if (!state.issuerEditorOpen) {
@@ -1587,3 +1594,26 @@ void initAuth().then((session) => {
     void initApp();
   }
 });
+
+const DRAFT_KEY = "gestor-cotizaciones-draft-v1";
+
+const saveDraft = () => {
+  syncStateFromRows();
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(toPayload()));
+};
+
+const loadDraft = () => {
+  try {
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+
+    if (!draft) {
+      clearForm();
+      return;
+    }
+
+    loadPayload(draft);
+  } catch {
+    localStorage.removeItem(DRAFT_KEY);
+    clearForm();
+  }
+};
